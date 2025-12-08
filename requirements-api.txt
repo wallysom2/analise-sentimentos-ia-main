@@ -1,15 +1,6 @@
-# Dependências base
-pandas
-numpy
-matplotlib
-seaborn
-nltk
-scikit-learn
-
 # API
 fastapi
 uvicorn[standard]
 pydantic
 
-# Opcional: Rede Bayesiana (descomente se usar)
-# pgmpy
+

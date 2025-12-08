@@ -1,4 +1,4 @@
-# Classificador de Sentimentos em E-commerce (Naive Bayes e Redes Bayesianas)
+# Classificador de Sentimentos em E-commerce (Naive Bayes)
 
 **Disciplina:** Introdução à Inteligência Artificial  
 **Semestre:** 2025.2  
@@ -44,7 +44,7 @@ Certifique-se de ter o **Python 3.8+** instalado.
 
 #### 2. Como Executar
 
-O projeto possui dois modos de execução:
+O projeto possui mais de um modo de execução:
 
 **A. Análise Completa (Gráficos e Comparativos):**
 Execute o script principal para treinar as 4 versões do modelo e gerar os gráficos comparativos de Recall e Matrizes de Confusão.
@@ -58,6 +58,18 @@ Para testar o modelo campeão (V2) digitnado frases manualmente e vendo a classi
 python src/demo.py
 ```
 
+**C. Modelo Rede Bayesiana (Bônus):**
+Para observar o desempenho do modelo baseado em Rede Bayesiana:
+```bash
+python src/bayesian-network.py
+```
+
+**D. Modelo Stochastic Gradient Descent (Descida de Gradiente Estocástica) (Bônus):**
+Para observar o desempenho do modelo baseado em Modelo Stochastic Gradient Descent (Descida de Gradiente Estocástica):
+```bash
+python src/optmized-gdc.py
+```
+
 ## Estrutura dos Arquivos
 
   * `src/`: Código-fonte da aplicação.
@@ -66,22 +78,30 @@ python src/demo.py
 
 ## Resultados e Demonstração
 
-Abaixo estão os resultados obtidos com o Modelo V2 (Campeão):
+Abaixo estão os resultados obtidos com os Modelos:
 
-Modelo v1:
+Modelo v1: <br/>
 ![Matriz de Confusão V1](assets/matriz_v1.png)
 
-Modelo v2:
+Modelo v2: <br/>
 ![Matriz de Confusão V2](assets/matriz_v2.png)
 
-Modelo v3:
+Modelo v3: <br/>
 ![Matriz de Confusão V3](assets/matriz_v3.png)
 
-Modelo v4:
+Modelo v4: <br/>
 ![Matriz de Confusão V4](assets/matriz_v4.png)
 
-Comparativo final de Recall:
+Comparativo final de Recall: <br/>
 ![Comparativo de Recall](assets/comparativo_recall.png)
+
+### Implementações Bônus
+
+Rede Bayesiana: <br/>
+![Matriz de Confusão Rede Bayesiana](assets/matriz_confusao_bayesiana.png)
+
+SGD - Stochastic Gradient Descent (Descida de Gradiente Estocástica): <br/>
+![Matriz de Confusão Rede Bayesiana](assets/matriz_sgd_classifier.png)
 
 * Arquivos disponíveis em `/assets`
 
