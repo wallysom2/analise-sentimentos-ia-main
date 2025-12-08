@@ -1,11 +1,20 @@
 import pandas as pd
 import numpy as np
 import re
+import os 
+import matplotlib.pyplot as plt
+import seaborn as sns 
+
+
 from pgmpy.estimators import HillClimbSearch, BayesianEstimator
 from pgmpy.models import DiscreteBayesianNetwork
 from pgmpy.inference import VariableElimination
 from pgmpy.inference.base import DiscreteFactor
+
+
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 
 N_TOP_WORDS = 30
 
@@ -131,24 +140,61 @@ def classify_new_text(model, top_words, new_review: str):
     
     return predicted_sentiment, highest_prob
 
+def gerar_e_salvar_matriz_confusao(y_test, y_pred, labels, acc):
+    output_dir = 'assets'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    cm = confusion_matrix(y_test, y_pred, labels=labels)
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=labels, yticklabels=labels)
+    plt.title(f'Matriz de Confusão - Rede Bayesiana - Acc {acc:.2%}')
+    plt.xlabel('Previsto')
+    plt.ylabel('Real')
+    
+    save_path = os.path.join(output_dir, 'matriz_confusao_bayesiana.png')
+    plt.savefig(save_path)
+    print(f"\n✅ Matriz de confusão salva em: {save_path}")
+    plt.show()
+
 def main():
-    parsed_data = parse_csv_data(file_path="data/dataset.csv") 
+    try:
+        parsed_data = parse_csv_data(file_path="data/base-reviews-b2w.csv") 
+    except FileNotFoundError:
+        print("Arquivo não encontrado. Verifique o caminho.")
+        return
 
     processed_data, vectorizer_trained, top_words_trained = \
         preprocess_and_feature_engineer_tfidf(parsed_data)
     
-    print("--- Features Geradas e Variável Alvo (Amostra 5 primeiras linhas) ---")
-    print(processed_data.head())
+    print("\n--- Preparando Dados ---")
+    full_sample = processed_data.sample(frac=0.1, random_state=42).copy()
     
-    sample_data = processed_data.sample(frac=0.1, random_state=42).copy()
+    train_data, test_data = train_test_split(full_sample, test_size=0.2, random_state=42)
     
-    model = train_bayesian_network(sample_data)
+    print(f"Tamanho total da amostra usada: {len(full_sample)}")
+    print(f"Tamanho Treino (80%): {len(train_data)}")
+    print(f"Tamanho Teste (20%): {len(test_data)}")
     
-    print("\n--- Estrutura da Rede Bayesiana ---")
-    print(model.edges())
+    model = train_bayesian_network(train_data)
+    
+    print("\n--- Iniciando Validação no Conjunto de Teste ---")
+    
+    X_test = test_data.drop(columns=["Sentiment_Target"])
+    y_test = test_data["Sentiment_Target"]
+    
+    y_pred_df = model.predict(X_test)
+    y_pred = y_pred_df["Sentiment_Target"]
+    
+    acc = accuracy_score(y_test, y_pred)
+    print(f"Acurácia no conjunto de teste: {acc:.2%}")
+    
+    classes_possiveis = ["Negativa", "Neutra", "Positiva"]
+    gerar_e_salvar_matriz_confusao(y_test, y_pred, classes_possiveis, acc)
 
-    print("INÍCIO DA CLASSIFICAÇÃO DE NOVOS TEXTOS")
-    
+    print("\n--- Testes Manuais ---")
     new_text_1 = "Ruim demais."
     classify_new_text(model, top_words_trained, new_text_1)
 

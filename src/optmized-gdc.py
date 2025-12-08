@@ -1,11 +1,17 @@
 import pandas as pd
 import numpy as np
 import re
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import SGDClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 MAX_FEATURES = 15000
 NGRAM_RANGE = (1, 3)
@@ -29,7 +35,7 @@ def preprocess_text_for_vectorizer(text):
     tokens = text.split()
     return " ".join([w for w in tokens if w not in portuguese_stopwords and len(w) > 2])
 
-def parse_csv_data(file_path="data/dataset.csv"):
+def parse_csv_data(file_path="data/base-reviews-b2w.csv"):
     csv_data: pd.DataFrame = pd.read_csv(
         file_path, 
         low_memory=False, 
@@ -44,8 +50,7 @@ def parse_csv_data(file_path="data/dataset.csv"):
     
     return csv_data.drop(columns=["review_title", "review_text"])
 
-def train_sgd_classifier(df: pd.DataFrame) -> Pipeline:
-    
+def prepare_data_for_training(df: pd.DataFrame):
     def categorize_rating(rating):
         if rating in [1, 2]: return "Negativa"
         if rating == 3: return "Neutra"
@@ -54,21 +59,23 @@ def train_sgd_classifier(df: pd.DataFrame) -> Pipeline:
         
     df['Sentiment_Target'] = df["overall_rating"].apply(categorize_rating)
     df = df[df['Sentiment_Target'] != 'Desconhecida'].copy()
+    
+    print("Processando textos (limpeza)...")
     df['clean_review'] = df["complete_review"].apply(preprocess_text_for_vectorizer)
     
-    X = df['clean_review']
-    y = df['Sentiment_Target']
+    return df['clean_review'], df['Sentiment_Target']
+
+def train_sgd_classifier(X_train, y_train) -> Pipeline:
     
-    # 1. CÁLCULO MANUAL DO PESO COM REFORÇO PARA NEUTRA
     le = LabelEncoder()
-    y_ind = le.fit_transform(y)
+    y_ind = le.fit_transform(y_train)
     classes = le.classes_
     
-    weights = compute_class_weight(class_weight='balanced', classes=classes, y=y)
+    weights = compute_class_weight(class_weight='balanced', classes=classes, y=y_train)
     
-    neutral_index = np.where(classes == 'Neutra')[0][0]
-
-    weights[neutral_index] *= 2.5
+    if 'Neutra' in classes:
+        neutral_index = np.where(classes == 'Neutra')[0][0]
+        weights[neutral_index] *= 2.5
     
     class_weights_dict = dict(zip(classes, weights))
 
@@ -91,7 +98,7 @@ def train_sgd_classifier(df: pd.DataFrame) -> Pipeline:
     ])
     
     print("\n[INFO] Iniciando treinamento do SGDClassifier (Log Loss, Peso Reforçado)...")
-    model_pipeline.fit(X, y)
+    model_pipeline.fit(X_train, y_train)
     print(f"[SUCCESS] Treinamento concluído. Features (N-grams) usadas: {len(model_pipeline['tfidf'].get_feature_names_out())}")
     
     return model_pipeline
@@ -116,12 +123,53 @@ def classify_optimized_text(model_pipeline: Pipeline, new_review: str):
 
     return predicted_sentiment, highest_prob
 
+def gerar_matriz_confusao(y_test, y_pred, labels, acc):
+    output_dir = 'assets'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    cm = confusion_matrix(y_test, y_pred, labels=labels)
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Reds', 
+                xticklabels=labels, yticklabels=labels)
+    
+    plt.title(f'Matriz de Confusão - SGDClassifier - Acc {acc:.2%}')
+    plt.xlabel('Previsto')
+    plt.ylabel('Real')
+    plt.tight_layout()
+    
+    save_path = os.path.join(output_dir, 'matriz_sgd_classifier.png')
+    plt.savefig(save_path)
+    print(f"\n✅ Matriz de confusão salva em: {save_path}")
+    plt.show()
+
 def main():
-    parsed_data = parse_csv_data(file_path="data/dataset.csv") 
+    try:
+        parsed_data = parse_csv_data(file_path="data/base-reviews-b2w.csv") 
+    except FileNotFoundError:
+        print("Erro: Arquivo não encontrado.")
+        return
 
-    optimized_model = train_sgd_classifier(parsed_data)
+    X, y = prepare_data_for_training(parsed_data)
 
-    print("INÍCIO DA CLASSIFICAÇÃO DE NOVOS TEXTOS")
+    print(f"\nDividindo dados: Total {len(X)} linhas.")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    
+    print(f"Treino: {len(X_train)} | Teste: {len(X_test)}")
+
+    optimized_model = train_sgd_classifier(X_train, y_train)
+
+    print("\n--- Avaliando no Conjunto de Teste ---")
+    y_pred = optimized_model.predict(X_test)
+    
+    acc = accuracy_score(y_test, y_pred)
+    print(f"Acurácia SGD: {acc:.2%}")
+    
+    labels = ["Negativa", "Neutra", "Positiva"]
+    gerar_matriz_confusao(y_test, y_pred, labels, acc)
+
+    print("\nINÍCIO DA CLASSIFICAÇÃO DE NOVOS TEXTOS (MANUAL)")
     
     new_text_1 = "Produto triste."
     classify_optimized_text(optimized_model, new_text_1)
@@ -134,7 +182,6 @@ def main():
 
     new_text_4 = "Recebi a caixa. O item está de acordo com a foto no site."
     classify_optimized_text(optimized_model, new_text_4)
-
 
 if __name__ == "__main__": 
     main()
