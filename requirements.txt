@@ -5,3 +5,10 @@ seaborn
 nltk
 scikit-learn
 pgmpy
+streamlit
+requests
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
