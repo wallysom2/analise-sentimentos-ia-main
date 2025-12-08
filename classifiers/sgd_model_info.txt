@@ -1,0 +1,11 @@
+Modelo: sgd_model
+Data de treinamento: 2025-12-08 16:45:33
+Treinado: True
+
+Informações adicionais:
+  name: SGD Classifier
+  type: sgd
+  is_trained: True
+  n_features: 15000
+  neutral_weight_boost: 2.5
+  description: SGDClassifier com TF-IDF e pesos balanceados

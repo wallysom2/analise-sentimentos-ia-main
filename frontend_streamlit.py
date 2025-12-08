@@ -58,6 +58,31 @@ def analisar_batch(textos: list, classificador: str = "naive_bayes") -> Dict[str
         st.error(f"Erro na requisição: {str(e)}")
         return None
 
+def analisar_todos_modelos(texto: str) -> Dict[str, Any]:
+    """
+    Analisa o texto com TODOS os classificadores disponíveis
+    Retorna um dicionário com os resultados de cada um
+    """
+    classificadores = ["naive_bayes", "sgd", "bayesian_network"]
+    resultados = {}
+    
+    for clf in classificadores:
+        try:
+            response = requests.post(
+                f"{API_URL}/classify",
+                json={
+                    "text": texto,
+                    "classifier": clf
+                },
+                timeout=15
+            )
+            response.raise_for_status()
+            resultados[clf] = response.json()
+        except requests.exceptions.RequestException as e:
+            resultados[clf] = {"error": str(e)}
+    
+    return resultados
+
 # ==================== INTERFACE ====================
 
 def main():
@@ -108,7 +133,7 @@ def main():
             st.info("Execute: `python run_api.py`")
 
     # Abas principais
-    tab1, tab2 = st.tabs(["Análise Individual", "Análise em Lote"])
+    tab1, tab2, tab3 = st.tabs(["Análise Individual", "Comparar Modelos", "Análise em Lote"])
 
     # ==================== ABA 1: ANÁLISE INDIVIDUAL ====================
     with tab1:
@@ -170,8 +195,101 @@ def main():
                         with st.expander("Ver Detalhes Técnicos"):
                             st.json(resultado)
 
-    # ==================== ABA 2: ANÁLISE EM LOTE ====================
+    # ==================== ABA 2: COMPARAR MODELOS ====================
     with tab2:
+        st.subheader("Compare todos os modelos lado a lado")
+        
+        st.info("Veja como cada classificador analisa o mesmo texto")
+        
+        # Input do usuário
+        texto_comparar = st.text_area(
+            "Digite o texto para comparar:",
+            height=120,
+            placeholder="Digite um texto e veja como cada modelo o classifica...",
+            key="texto_comparar"
+        )
+        
+        if st.button("Comparar Todos os Modelos", type="primary", key="btn_comparar"):
+            if not texto_comparar.strip():
+                st.warning("Por favor, digite um texto para comparar!")
+            else:
+                with st.spinner("Analisando com todos os modelos..."):
+                    resultados = analisar_todos_modelos(texto_comparar)
+                    
+                    if resultados:
+                        st.markdown("---")
+                        st.markdown("### Resultados Comparativos")
+                        
+                        # Exibir em 3 colunas lado a lado
+                        col1, col2, col3 = st.columns(3)
+                        
+                        modelos_info = [
+                            ("naive_bayes", "Naive Bayes", col1),
+                            ("sgd", "SGD Classifier", col2),
+                            ("bayesian_network", "Rede Bayesiana", col3)
+                        ]
+                        
+                        for clf_key, clf_nome, coluna in modelos_info:
+                            with coluna:
+                                st.markdown(f"#### {clf_nome}")
+                                
+                                res = resultados.get(clf_key, {})
+                                
+                                if "error" in res:
+                                    st.error(f"Erro: {res['error'][:50]}...")
+                                else:
+                                    sentimento = res.get("sentiment", "N/A")
+                                    confianca = res.get("confidence", 0)
+                                    
+                                    # Sentimento
+                                    st.markdown(f"**Sentimento:**")
+                                    st.markdown(f"### {sentimento.upper()}")
+                                    
+                                    # Confiança
+                                    st.metric("Confiança", f"{confianca:.2%}")
+                                    
+                                    # Probabilidades
+                                    probs = res.get("probabilities", {})
+                                    if probs:
+                                        st.markdown("**Probabilidades:**")
+                                        for sent, prob in probs.items():
+                                            st.progress(prob, text=f"{sent}: {prob:.2%}")
+                        
+                        # Resumo comparativo
+                        st.markdown("---")
+                        st.markdown("### Resumo")
+                        
+                        # Tabela comparativa
+                        dados_tabela = []
+                        for clf_key, clf_nome, _ in modelos_info:
+                            res = resultados.get(clf_key, {})
+                            if "error" not in res:
+                                dados_tabela.append({
+                                    "Modelo": clf_nome,
+                                    "Sentimento": res.get("sentiment", "N/A").upper(),
+                                    "Confiança": f"{res.get('confidence', 0):.2%}"
+                                })
+                        
+                        if dados_tabela:
+                            st.dataframe(dados_tabela, use_container_width=True)
+                        
+                        # Verificar consenso
+                        sentimentos = [resultados.get(clf, {}).get("sentiment") 
+                                      for clf in ["naive_bayes", "sgd", "bayesian_network"]
+                                      if "error" not in resultados.get(clf, {"error": True})]
+                        
+                        if sentimentos:
+                            if len(set(sentimentos)) == 1:
+                                st.success(f"Todos os modelos concordam: **{sentimentos[0].upper()}**")
+                            else:
+                                st.warning("Os modelos têm opiniões diferentes sobre este texto")
+                        
+                        # Detalhes técnicos
+                        with st.expander("Ver Todos os Detalhes (JSON)"):
+                            st.json(resultados)
+
+    # ==================== ABA 3: ANÁLISE EM LOTE ====================
+    with tab3:
         st.subheader("Analise múltiplos textos de uma vez")
         
         st.info("Digite um texto por linha")

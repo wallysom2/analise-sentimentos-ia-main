@@ -1,0 +1,11 @@
+Modelo: naive_bayes_model
+Data de treinamento: 2025-12-08 16:45:24
+Treinado: True
+
+Informações adicionais:
+  name: Naive Bayes
+  type: naive_bayes
+  preprocessing: negation
+  is_trained: True
+  vocabulary_size: 73446
+  description: Classificador Naive Bayes implementado do zero com suavização de Laplace

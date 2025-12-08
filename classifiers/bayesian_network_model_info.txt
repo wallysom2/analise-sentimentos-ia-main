@@ -1,0 +1,12 @@
+Modelo: bayesian_network_model
+Data de treinamento: 2025-12-08 16:45:48
+Treinado: True
+
+Informações adicionais:
+  name: Bayesian Network
+  type: bayesian_network
+  is_trained: True
+  n_top_words: 30
+  sample_fraction: 0.1
+  top_words: ['produto', 'muito', 'não', 'bom', 'recomendo', 'excelente', 'gostei', 'entrega', 'ótimo', 'qualidade', 'prazo', 'chegou', 'bem', 'antes', 'super', 'boa', 'recebi', 'ótima', 'rápida', 'tem', 'comprei', 'como', 'americanas', 'veio', 'compra', 'ainda', 'estou', 'expectativas', 'custo', 'sem']
+  description: Rede Bayesiana com estrutura aprendida via Hill Climbing

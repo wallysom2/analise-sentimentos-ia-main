@@ -1,7 +1,6 @@
 """
-API REST para Análise de Sentimentos
-Suporta múltiplos classificadores: Naive Bayes (padrão), SGD e Rede Bayesiana
-Agora carrega modelos pré-treinados da pasta classifiers/
+API REST para Análise de Sentimentos - VERSÃO COM MODELOS SALVOS
+Carrega modelos pré-treinados ao invés de treinar a cada inicialização
 """
 import os
 import pickle
@@ -27,20 +26,25 @@ app = FastAPI(
     
     ## Classificadores Disponíveis
     
-    - **naive_bayes** (padrão): Implementação do zero com suavização de Laplace
+    - **naive_bayes**: Implementação do zero com suavização de Laplace
     - **sgd**: SGDClassifier otimizado com TF-IDF
     - **bayesian_network**: Rede Bayesiana (requer pgmpy)
     
-    ## Uso
+    ## Como Funciona
     
-    1. O modelo Naive Bayes é carregado automaticamente na inicialização
-    2. Use `/classify` para classificar textos
-    3. Use `/classify/batch` para classificar múltiplos textos
+    1. Os modelos são carregados de arquivos .pkl salvos
+    2. Se um modelo não existir, ele será treinado automaticamente
+    3. Use `/classify` para classificar textos
+    4. Use `/classify/batch` para classificar múltiplos textos
+    
+    ## Treinamento
+    
+    Execute `python train_all_models.py` para treinar todos os modelos de uma vez.
     """,
-    version="1.0.0"
+    version="2.0.0"
 )
 
-# CORS para permitir requisições de outras origens
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -56,12 +60,6 @@ class ClassifierType(str, Enum):
     naive_bayes = "naive_bayes"
     sgd = "sgd"
     bayesian_network = "bayesian_network"
-
-
-class PreprocessingType(str, Enum):
-    simple = "simple"
-    negation = "negation"
-    stemming = "stemming"
 
 
 class ClassifyRequest(BaseModel):
@@ -116,10 +114,10 @@ class ModelInfoResponse(BaseModel):
     current_models: dict
     
 
-# ==================== ESTADO GLOBAL ====================
+# ==================== GERENCIAMENTO DE MODELOS ====================
 
 class ModelManager:
-    """Gerencia os modelos - CARREGA de arquivos salvos."""
+    """Gerencia o carregamento e uso de modelos salvos."""
     
     def __init__(self):
         self.naive_bayes: Optional[NaiveBayesClassifier] = None
@@ -141,8 +139,6 @@ class ModelManager:
         model_path = self._get_model_path(classifier_type)
         
         if not os.path.exists(model_path):
-            print(f"❌ Modelo não encontrado: {model_path}")
-            print(f"💡 Execute: python train_all_models.py")
             return None
         
         try:
@@ -153,6 +149,20 @@ class ModelManager:
         except Exception as e:
             print(f"❌ Erro ao carregar modelo {classifier_type.value}: {e}")
             return None
+    
+    def _save_to_file(self, classifier_type: ClassifierType, model):
+        """Salva modelo em arquivo pickle."""
+        model_path = self._get_model_path(classifier_type)
+        
+        # Cria pasta se não existir
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        
+        try:
+            with open(model_path, 'wb') as f:
+                pickle.dump(model, f)
+            print(f"💾 Modelo {classifier_type.value} salvo em {model_path}")
+        except Exception as e:
+            print(f"❌ Erro ao salvar modelo {classifier_type.value}: {e}")
     
     def load_data(self):
         """Carrega os dados do CSV (apenas se necessário para treinar)."""
@@ -178,7 +188,10 @@ class ModelManager:
         return self.df
     
     def get_classifier(self, classifier_type: ClassifierType):
-        """Retorna o classificador - CARREGA de arquivo se disponível."""
+        """
+        Retorna o classificador solicitado.
+        Prioridade: 1) Já carregado na memória, 2) Carregar de arquivo, 3) Treinar novo
+        """
         
         # 1. Verifica se já está na memória
         if classifier_type == ClassifierType.naive_bayes and self.naive_bayes is not None:
@@ -191,13 +204,15 @@ class ModelManager:
         # 2. Tenta carregar de arquivo
         model = self._load_from_file(classifier_type)
         
-        # 3. Se não encontrou arquivo, treina (fallback)
+        # 3. Se não encontrou, treina novo
         if model is None:
             print(f"⚠️ Modelo {classifier_type.value} não encontrado. Treinando...")
-            print(f"💡 Dica: Execute 'python train_all_models.py' para evitar isso")
-            model = self._train_fallback(classifier_type)
+            print(f"💡 Dica: Execute 'python train_all_models.py' para treinar todos de uma vez")
+            model = self._train_new_model(classifier_type)
+            if model is not None:
+                self._save_to_file(classifier_type, model)
         
-        # 4. Armazena na memória
+        # Armazena na memória
         if classifier_type == ClassifierType.naive_bayes:
             self.naive_bayes = model
         elif classifier_type == ClassifierType.sgd:
@@ -207,32 +222,36 @@ class ModelManager:
         
         return model
     
-    def _train_fallback(self, classifier_type: ClassifierType):
-        """Treina modelo como fallback (se arquivo não existir)."""
+    def _train_new_model(self, classifier_type: ClassifierType):
+        """Treina um novo modelo (fallback se não encontrar arquivo)."""
         df = self.load_data()
         
-        if classifier_type == ClassifierType.naive_bayes:
-            print("🔄 Treinando Naive Bayes...")
-            model = NaiveBayesClassifier(preprocessing="negation")
-            df_train = df.copy()
-            df_train['tokens'] = df_train['texto_completo'].apply(model._tokenize)
-            model.train(df_train)
-            print("✅ Naive Bayes pronto!")
-            return model
-        
-        elif classifier_type == ClassifierType.sgd:
-            print("🔄 Treinando SGD Classifier...")
-            model = SGDSentimentClassifier()
-            model.train(df)
-            print("✅ SGD Classifier pronto!")
-            return model
-        
-        elif classifier_type == ClassifierType.bayesian_network:
-            print("🔄 Treinando Rede Bayesiana (isso pode demorar)...")
-            model = BayesianNetworkClassifier()
-            model.train(df)
-            print("✅ Rede Bayesiana pronta!")
-            return model
+        try:
+            if classifier_type == ClassifierType.naive_bayes:
+                print("🔄 Treinando Naive Bayes...")
+                model = NaiveBayesClassifier(preprocessing="negation")
+                df_train = df.copy()
+                df_train['tokens'] = df_train['texto_completo'].apply(model._tokenize)
+                model.train(df_train)
+                print("✅ Naive Bayes pronto!")
+                return model
+            
+            elif classifier_type == ClassifierType.sgd:
+                print("🔄 Treinando SGD Classifier...")
+                model = SGDSentimentClassifier()
+                model.train(df)
+                print("✅ SGD Classifier pronto!")
+                return model
+            
+            elif classifier_type == ClassifierType.bayesian_network:
+                print("🔄 Treinando Rede Bayesiana (isso pode demorar)...")
+                model = BayesianNetworkClassifier()
+                model.train(df)
+                print("✅ Rede Bayesiana pronta!")
+                return model
+        except Exception as e:
+            print(f"❌ Erro ao treinar {classifier_type.value}: {e}")
+            return None
 
 
 model_manager = ModelManager()
@@ -242,29 +261,18 @@ model_manager = ModelManager()
 
 @app.on_event("startup")
 async def startup_event():
-    """Carrega TODOS os modelos salvos na inicialização."""
+    """Carrega modelos salvos na inicialização."""
     print("\n🚀 Iniciando API de Análise de Sentimentos...")
     print(f"📁 Pasta de modelos: {MODELS_DIR}")
     
-    # Lista modelos disponíveis
-    if os.path.exists(MODELS_DIR):
-        pkl_files = [f for f in os.listdir(MODELS_DIR) if f.endswith('.pkl')]
-        print(f"📦 Modelos encontrados: {pkl_files}")
-    else:
-        print(f"⚠️ Pasta de modelos não existe: {MODELS_DIR}")
-        print("💡 Execute: python train_all_models.py")
-    
-    # Carrega todos os modelos salvos
+    # Tenta carregar Naive Bayes (modelo padrão)
     try:
-        print("\n🔄 Carregando modelos salvos...")
         model_manager.get_classifier(ClassifierType.naive_bayes)
-        model_manager.get_classifier(ClassifierType.sgd)
-        model_manager.get_classifier(ClassifierType.bayesian_network)
-        print("\n✅ Todos os modelos carregados! API pronta!\n")
+        print("✅ API pronta para receber requisições!\n")
     except Exception as e:
         print(f"⚠️ Aviso: {e}")
         print("💡 Execute 'python train_all_models.py' para treinar os modelos")
-        print("✅ API iniciada, mas alguns modelos podem não estar disponíveis\n")
+        print("✅ API iniciada, mas pode precisar treinar modelos na primeira requisição\n")
 
 
 # ==================== ENDPOINTS ====================
@@ -274,28 +282,39 @@ async def root():
     """Endpoint raiz com informações da API."""
     return {
         "name": "API de Análise de Sentimentos",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "online",
-        "docs": "/docs"
+        "docs": "/docs",
+        "models_dir": MODELS_DIR
     }
 
 
 @app.get("/health", tags=["Info"])
 async def health_check():
-    """Verifica o status da API."""
+    """Verifica o status da API e modelos."""
+    models_status = {}
+    
+    for classifier_type in ClassifierType:
+        model_path = model_manager._get_model_path(classifier_type)
+        models_status[classifier_type.value] = {
+            "loaded_in_memory": (
+                (classifier_type == ClassifierType.naive_bayes and model_manager.naive_bayes is not None) or
+                (classifier_type == ClassifierType.sgd and model_manager.sgd is not None) or
+                (classifier_type == ClassifierType.bayesian_network and model_manager.bayesian_network is not None)
+            ),
+            "file_exists": os.path.exists(model_path),
+            "file_path": model_path
+        }
+    
     return {
         "status": "healthy",
-        "models_loaded": {
-            "naive_bayes": model_manager.naive_bayes is not None,
-            "sgd": model_manager.sgd is not None,
-            "bayesian_network": model_manager.bayesian_network is not None
-        }
+        "models": models_status
     }
 
 
 @app.get("/models", response_model=ModelInfoResponse, tags=["Info"])
 async def get_models_info():
-    """Retorna informações sobre os modelos disponíveis."""
+    """Retorna informações sobre os modelos."""
     models_info = {}
     
     if model_manager.naive_bayes:
@@ -321,6 +340,13 @@ async def classify_text(request: ClassifyRequest):
     """
     try:
         classifier = model_manager.get_classifier(request.classifier)
+        
+        if classifier is None:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Modelo {request.classifier.value} não disponível. Execute 'python train_all_models.py'"
+            )
+        
         result = classifier.predict_with_details(request.text)
         
         return ClassifyResponse(
@@ -330,6 +356,8 @@ async def classify_text(request: ClassifyRequest):
             probabilities=result['probabilities'],
             classifier_used=request.classifier.value
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -344,6 +372,13 @@ async def classify_batch(request: BatchClassifyRequest):
     """
     try:
         classifier = model_manager.get_classifier(request.classifier)
+        
+        if classifier is None:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Modelo {request.classifier.value} não disponível"
+            )
+        
         results = []
         
         for text in request.texts:
@@ -361,6 +396,8 @@ async def classify_batch(request: BatchClassifyRequest):
             classifier_used=request.classifier.value,
             total_processed=len(results)
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -368,12 +405,12 @@ async def classify_batch(request: BatchClassifyRequest):
 @app.post("/train/{classifier_type}", tags=["Treinamento"])
 async def train_model(classifier_type: ClassifierType):
     """
-    Força o (re)treinamento de um modelo específico.
+    Força o (re)treinamento de um modelo específico e salva em arquivo.
     
-    Útil para recarregar modelos após atualização dos dados.
+    Útil para atualizar modelos com novos dados.
     """
     try:
-        # Reseta o modelo para forçar retreino
+        # Remove modelo da memória
         if classifier_type == ClassifierType.naive_bayes:
             model_manager.naive_bayes = None
         elif classifier_type == ClassifierType.sgd:
@@ -381,14 +418,32 @@ async def train_model(classifier_type: ClassifierType):
         elif classifier_type == ClassifierType.bayesian_network:
             model_manager.bayesian_network = None
         
-        # Retreina
-        classifier = model_manager.get_classifier(classifier_type)
-        info = classifier.get_info()
+        # Treina novo
+        model = model_manager._train_new_model(classifier_type)
+        
+        if model is None:
+            raise HTTPException(status_code=500, detail="Falha ao treinar modelo")
+        
+        # Salva em arquivo
+        model_manager._save_to_file(classifier_type, model)
+        
+        # Atualiza na memória
+        if classifier_type == ClassifierType.naive_bayes:
+            model_manager.naive_bayes = model
+        elif classifier_type == ClassifierType.sgd:
+            model_manager.sgd = model
+        elif classifier_type == ClassifierType.bayesian_network:
+            model_manager.bayesian_network = model
+        
+        info = model.get_info()
         
         return {
-            "message": f"Modelo {classifier_type.value} treinado com sucesso",
-            "model_info": info
+            "message": f"Modelo {classifier_type.value} treinado e salvo com sucesso",
+            "model_info": info,
+            "saved_to": model_manager._get_model_path(classifier_type)
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
