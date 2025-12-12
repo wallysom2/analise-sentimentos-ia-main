@@ -34,6 +34,7 @@ def limpeza_v2_negacao(texto):
             pular = False
             continue
         t = tokens[i]
+        # Se encontrar 'não', cria token composto (ex: não_gostei)
         if t == 'não':
             if i+1 < len(tokens):
                 novos_tokens.append("não_" + tokens[i+1])
@@ -58,13 +59,14 @@ def limpeza_v3_stemming(texto):
         t = tokens[i]
         if t == 'não':
             if i+1 < len(tokens):
+                # Stemming na palavra negada: "não_gostei" -> "não_gost"
                 raiz_prox = stemmer.stem(tokens[i+1])
                 novos_tokens.append("não_" + raiz_prox)
                 pular = True
             else:
                 novos_tokens.append(t)
         elif t not in stop_words:
-            novos_tokens.append(stemmer.stem(t))
+            novos_tokens.append(stemmer.stem(t)) # Stemming normal
     return novos_tokens
 
 # --- FUNÇÕES DO MODELO NAIVE BAYES ---
@@ -78,10 +80,12 @@ def treinar_modelo(df_treino):
         cat = linha['sentimento']
         for p in tokens:
             vocabulario.add(p)
+            # Contabiliza ocorrências
             if cat == 'Positivo': contagem_pos[p]+=1; total_pos+=1
             elif cat == 'Negativo': contagem_neg[p]+=1; total_neg+=1
             elif cat == 'Neutro': contagem_neu[p]+=1; total_neu+=1
 
+    # Retorna dicionário com todas as estatísticas aprendidas
     return {
         'c_pos': contagem_pos, 'c_neg': contagem_neg, 'c_neu': contagem_neu,
         't_pos': total_pos, 't_neg': total_neg, 't_neu': total_neu,
@@ -89,6 +93,7 @@ def treinar_modelo(df_treino):
     }
 
 def classificar_texto(tokens, modelo):
+    # Desempacota dados do treino
     c_pos = modelo['c_pos']; c_neg = modelo['c_neg']; c_neu = modelo['c_neu']
     t_pos = modelo['t_pos']; t_neg = modelo['t_neg']; t_neu = modelo['t_neu']
     V = modelo['V']
@@ -96,10 +101,13 @@ def classificar_texto(tokens, modelo):
     s_pos = 0; s_neg = 0; s_neu = 0
 
     for p in tokens:
+        # Soma logaritmos para evitar underflow numérico
+        # Suavização de Laplace: (+1 no numerador) e (+V no denominador)
         s_pos += math.log((c_pos.get(p,0)+1)/(t_pos+V))
         s_neg += math.log((c_neg.get(p,0)+1)/(t_neg+V))
         s_neu += math.log((c_neu.get(p,0)+1)/(t_neu+V))
 
+    # Escolhe a classe com maior probabilidade final
     m = max(s_pos, s_neg, s_neu)
     if m == s_pos: return 'Positivo'
     elif m == s_neg: return 'Negativo'
