@@ -46,25 +46,34 @@ Certifique-se de ter o **Python 3.8+** instalado.
 
 O projeto possui mais de um modo de execução:
 
-**A. Análise Completa (Gráficos e Comparativos):**
-Execute o script principal para treinar as 4 versões do modelo e gerar os gráficos comparativos de Recall e Matrizes de Confusão.
+**A. Interface Interativa com Benchmarks:**
+Execute os scripts para testar a análise de sentimentos com a interface e api:
+```bash
+python run_api.py
+```
+```bash
+streamlit run frontend_streamlit.py
+```
+
+**B. Análise Completa (Naive Bayes):**
+Execute o script principal para treinar as 4 versões do modelo e gerar os gráficos comparativos de Recall e Matrizes de Confusão.:
 ```bash
 python src/main.py
 ```
 
-**B. Modo Demonstração (Teste Interativo):**
+**C. Modo Demonstração (Teste Interativo no Terminal):**
 Para testar o modelo campeão (V2) digitnado frases manualmente e vendo a classificação em tempo real:
 ```bash
 python src/demo.py
 ```
 
-**C. Modelo Rede Bayesiana (Bônus):**
+**D. Modelo Rede Bayesiana (Bônus):**
 Para observar o desempenho do modelo baseado em Rede Bayesiana:
 ```bash
 python src/bayesian-network.py
 ```
 
-**D. Modelo Stochastic Gradient Descent (Descida de Gradiente Estocástica) (Bônus):**
+**E. Modelo Stochastic Gradient Descent (Descida de Gradiente Estocástica) (Bônus):**
 Para observar o desempenho do modelo baseado em Modelo Stochastic Gradient Descent (Descida de Gradiente Estocástica):
 ```bash
 python src/optmized-gdc.py
