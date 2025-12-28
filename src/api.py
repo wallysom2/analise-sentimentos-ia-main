@@ -13,7 +13,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from classifiers import NaiveBayesClassifier, SGDSentimentClassifier, BayesianNetworkClassifier
+# Adiciona o diretório src ao path para garantir imports corretos
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Importação relativa
+from src.classifiers import NaiveBayesClassifier, SGDSentimentClassifier, BayesianNetworkClassifier
 
 # ==================== CONFIGURAÇÃO ====================
 
